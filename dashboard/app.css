@@ -136,6 +136,17 @@ ol.plan li::marker { color: var(--accent); font-weight: 700; }
 .foot { color: var(--faint); font-size: 12.5px; margin-top: 26px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
 
 /* Method view */
+/* Start-here spotlight */
+.spotlight { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--panel); border-radius: 4px; padding: 14px 16px 8px; margin: 18px 0 4px; }
+.spotlight h2 { font-size: 16px; margin: 0 0 2px; }
+.spot-note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.spotlight ol { margin: 0; padding-left: 20px; }
+.spotlight li { margin: 0 0 10px; cursor: pointer; color: var(--muted); }
+.spotlight li b { color: var(--ink); }
+.spotlight li:hover b { color: var(--accent); }
+
+/* Plain-words take in the detail drawer */
+.take { color: var(--ink); font-size: 14.5px; border-left: 3px solid var(--amber); padding-left: 12px; margin: 0 0 14px; }
 .method { max-width: 82ch; }
 .method p { color: var(--muted); }
 .method p b, .method li b { color: var(--ink); }

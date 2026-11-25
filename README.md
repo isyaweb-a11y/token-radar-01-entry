@@ -4,11 +4,29 @@
 [![rank](https://make.fun/badge/token-radar-01/isyaweb-a11y/token-radar-01-entry/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![reward](https://make.fun/badge/token-radar-01/isyaweb-a11y/token-radar-01-entry/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
-A token launch radar: it reads the competition's sealed DefiLlama snapshot (758 protocols) and ranks every protocol that records no token yet — all 40 watchlist protocols plus 158 more below the $50M floor — by an implied token value, with a concrete farm plan for each row.
+## What this is
 
-The value model is comps-anchored, not a flat multiple. For each category, the protocols whose token already trades give market-cap-to-TVL ratios; the category's multiple is their median, winsorized at the market's 90th percentile and shrunk toward the global median by the number of comparisons behind it. A row's implied value is its TVL times that multiple, adjusted for its 7-day TVL growth, how long it has run with no token, and its chain breadth. Exchanges, exchanges' own products, versioned deployments and the wrapper categories (bridges, liquid staking/restaking) are not ranked: their value is an asset that already trades. Traded protocols are shown apart, at the market's own values, as the comparison set the multiples are priced from.
+A radar for the question every airdrop farmer actually asks at the start of the month: **of all the protocols with no token yet, which one is worth my evenings?**
 
-The dashboard is a static page with no network: a sortable, filterable board (search, category, chain, watchlist-only), a detail view per protocol showing the full arithmetic behind its value and its seven-step farm plan with costs and times, a live-tokens view, and a method view that prints every category anchor the model derived.
+It reads one frozen snapshot of the protocol universe — 758 protocols from DefiLlama, 14 November 2026 — and ranks 198 of them that record no token. Every row gets an implied value and a farm plan written for that row alone. Open the dashboard, start at the top, and work down.
+
+## How to read it in 30 seconds
+
+1. **Start here.** The top five rows each get one honest sentence: how much money is locked in it, whether that money is arriving or leaving, how long it has gone without a token, and — when it matters — that its price is built on very little evidence.
+2. **Click a row.** You get a plain-words take on that protocol, the arithmetic behind its number, and a seven-step farm plan with real costs and dates.
+3. **Check the caveat before the money.** Some categories are priced off a single traded token. The page says so on the row. A number built on one comparison is a direction, not a price.
+
+## How the number is built
+
+No flat multiple, no favourite names. For each category, the traded tokens in it give market-cap-to-TVL ratios; the category's multiple is the median of those ratios, winsorized at the market's 90th percentile and shrunk toward the global median by how many comparisons stand behind it. A row's implied value is its TVL times that multiple, adjusted for its 7-day TVL growth, how long it has run with no token, and how many chains it runs on.
+
+Exchanges, exchanges' own products, versioned deployments and the wrapper categories (bridges, liquid staking and restaking) are not ranked — their value is an asset that already trades. Traded protocols are shown apart, at the market's own values, as the comparison set the multiples are priced from. All 40 watchlist protocols are in, plus 158 more below the $50M floor: the early rows are the point of a radar. The model is labelled comps-2 on the dashboard, so anyone can check which version of the arithmetic they are reading.
+
+## What it will not do
+
+- It will not tell you a token is coming. A protocol on this board may never issue one, and the board would still be right about what it is worth today.
+- It will not tell you to buy, sell or hold anything. Implied values are this dashboard's own claims about a hypothetical token, not prices and not advice.
+- It will not send you to a claim link. Every farm plan ends the same way: check the protocol's own site, follow only links that site itself publishes, and never pay a fee to claim.
 
 ## Run it
 

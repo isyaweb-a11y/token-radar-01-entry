@@ -1,29 +1,38 @@
 // Token launch radar: the model.
 //
-// One sealed snapshot of the protocol universe goes in; one ranked board comes out. The board
-// covers every slug on the snapshot's watchlist (the floor, never the ceiling) and ranks every
-// other rankable pre-token protocol the snapshot carries, because the early rows below the floor
-// are the ones a radar exists to find. Protocols whose token already trades are never ranked:
-// they are the comparison set, shown apart at the market's own values.
+// A sealed snapshot of the protocol universe goes in, one ranked board comes out.
+// The board covers every slug on the snapshot's watchlist and every other rankable
+// pre-token protocol in the snapshot, because the rows below the floor are the ones
+// a radar exists to find. A protocol whose token already trades is never ranked:
+// it is the comparison set, shown apart at the market's own values.
 //
-// The implied value is anchored to the snapshot's own market, not to a constant. For every
-// category, the protocols in it whose token already trades give a set of market-cap-to-TVL
-// ratios; the category's multiple is the median of those ratios, shrunk toward the global
-// median by the number of comparisons behind it, so a category priced by two thin comparisons
-// borrows strength from the whole market instead of shouting. The ratios are winsorized first
-// at the market's own 90th percentile: a traded token whose recorded TVL is a sliver of its
-// market cap would otherwise price a whole category at hundreds of times TVL. A pre-token
-// protocol's base value
-// is its TVL times its category's multiple. Three adjustments follow, each stated on the page:
+// The implied value is anchored to the snapshot's own market, never to a constant
+// I picked. For each category, the traded tokens in it give market-cap-to-TVL
+// ratios; the category multiple is the median of those ratios, shrunk toward the
+// global median by how many comparisons stand behind it, so a category priced by
+// one or two thin comps borrows strength from the whole market instead of shouting.
+// Ratios are winsorized first at the market's own 90th percentile: a traded token
+// whose recorded TVL is a sliver of its market cap would otherwise price a whole
+// category at hundreds of times TVL. A pre-token protocol's base value is its TVL
+// times its category's multiple, then three adjustments, each printed on the page:
 //
 //   growth     its 7-day TVL change, clamped, moves the value by up to about half
-//   maturity   the longer a protocol has run with no token, the closer it sits to the full
-//              multiple; a young one is discounted, because most young TVL does not stay
-//   breadth    each chain past the first adds a little, to a cap: distribution is surface
-//              a token launch can be priced on
+//   maturity   the longer a protocol has run with no token, the closer it sits to
+//              the full multiple; young TVL gets discounted, because most of it
+//              does not stay
+//   breadth    each chain past the first adds a little, to a cap: distribution is
+//              surface a token launch can be priced on
 //
-// No protocol's name is ever special-cased: one function scores every row, and the dashboard
-// recomputes each row's value from the same figures so the page and board.json cannot drift.
+// No protocol's name is ever special-cased. One function scores every row, and the
+// dashboard recomputes each row's value from the same figures, so the page and
+// board.json cannot drift apart.
+//
+// The farm plans are written the same way, but they read like a person wrote them
+// for that one protocol, because they are built from that one protocol's record:
+// its category picks the moves, its first chain prices the gas, its TVL sizes the
+// capital, its age sets the hold, its 7-day change sets the cadence, and the
+// snapshot's date sets the review date. The wording varies by row on purpose —
+// the same move in the same words 198 times would be a form letter, not a plan.
 
 /** The snapshot's protocol entry: exactly the ten fields the sealed input carries. */
 export interface SnapshotProtocol {
@@ -375,6 +384,15 @@ export function stepText(step: FarmStep): string {
   return s;
 }
 
+/* ------------------------------------------------------------------ */
+/* Farm plans: the human part.                                        */
+/*                                                                     */
+/* Every figure below comes from the row itself — category, first      */
+/* chain, TVL, age, 7-day change, snapshot date. Nothing is written   */
+/* for one named protocol; the wording is picked by the row's own      */
+/* numbers, so two rows in the same category still read differently.   */
+/* ------------------------------------------------------------------ */
+
 /** The first chain a protocol names, or a neutral phrase when it names none. */
 function chainOf(p: SnapshotProtocol): string {
   return p.chains.length > 0 ? p.chains[0]! : 'its main chain';
@@ -414,89 +432,132 @@ function holdDaysFor(age: number | null): number {
   return 30;
 }
 
-type ActionPair = { first: string; deepen: string };
+/** Deterministic pick from a list, seeded by a string — same row, same words, every run. */
+function pick<T>(options: T[], seed: string): T {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 1_000_003;
+  return options[h % options.length]!;
+}
 
-/** The category's two moves, in words a farmer can follow: open the position, then deepen it. */
-function actionsFor(p: SnapshotProtocol, capital: number, chain: string): ActionPair {
+/** One decimal with a sign, for a 7-day change a reader can feel. */
+function pct1(n: number): string {
+  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
+
+type Playbook = { first: string; deepen: string; watchFor: string };
+
+/**
+ * The category's two moves, written the way someone who actually uses that kind of
+ * protocol would say them. A lending position is not a DEX position with the nouns
+ * swapped: the risks, the second move and the thing to watch are all different.
+ */
+function actionsFor(p: SnapshotProtocol, capital: number, chain: string): Playbook {
   const c = (p.category ?? '').toLowerCase();
   const n = p.name;
-  if (c.includes('lend') || c.includes('cdp') || c.includes('collateral')) {
+  const third = Math.round(capital / 3);
+  const quarter = Math.round(capital / 4);
+  if (c.includes('risk curator') || c.includes('curator') || c.includes('onchain capital') || c.includes('allocator')) {
     return {
-      first: `Supply $${capital} of USDC to ${n} on ${chain} so the wallet starts earning a supply history`,
-      deepen: `Borrow about $${Math.round(capital / 3)} of USDC against that supply on ${n} and re-supply it once, keeping the health factor above 2`,
+      first: `Put $${capital} into a ${n} vault on ${chain} — you are trusting the curator's picks, so read which vaults it actually runs before you pick one, and keep the vault shares in the wallet that deposited`,
+      deepen: `After two weeks, add about $${quarter} more to the same ${n} vault, and only then look at whether a different vault of theirs fits better; one vault, topped up, reads as a real user`,
+      watchFor: `which vaults ${n} is actually allocating to, and whether its allocation changes without warning`,
     };
   }
-  if (c.includes('dex') || c.includes('aggregator') || c.includes('yield') || c.includes('leveraged')) {
+  if (c.includes('lending') || c.includes('cdp') || c.includes('collateral')) {
     return {
-      first: `Swap about $${Math.round(capital / 4)} through ${n} on ${chain}, then provide the rest as liquidity in its most-used pool`,
-      deepen: `Keep the liquidity position open on ${n} and claim any pool fees weekly so the position shows continuing use, not one visit`,
+      first: `Lend $${capital} of USDC on ${n} on ${chain} — start as a lender, not a borrower, so the wallet has a clean supply history first`,
+      deepen: `Borrow about $${third} against that supply and lend it out again once, keeping the health factor above 2 the whole time; if the borrow rate jumps, pay it back and stop there`,
+      watchFor: `the borrow rate and your health factor on ${n} — a loan that looked cheap on day one can turn expensive fast`,
     };
   }
-  if (c.includes('bridge') || c.includes('canonical')) {
+  if (c.includes('yield aggregator') || c.includes('yield')) {
     return {
-      first: `Bridge $${capital} of USDC from Ethereum to ${chain} through ${n} and hold the bridged balance on the far side`,
-      deepen: `Use part of the bridged funds in one app on ${chain}, then bridge a smaller amount back through ${n} a week later`,
+      first: `Drop $${capital} into the ${n} strategy on ${chain} that has held the most TVL the longest, not the one flashing the highest number this week, and leave it to compound`,
+      deepen: `Harvest once when the rewards are worth more than the gas to claim them, then put the harvest straight back into the same ${n} strategy instead of cashing it out`,
+      watchFor: `whether ${n}'s headline yield is real or just a new pool's first-week bribe that fades`,
     };
   }
-  if (c.includes('staking') || c.includes('restak')) {
+  if (c.includes('dex') || c.includes('liquidity manager')) {
     return {
-      first: `Stake $${capital} of the chain's staking asset through ${n} on ${chain} and keep the staking receipt in the same wallet`,
-      deepen: `Restake or delegate the receipt position once if ${n} offers it, and leave both positions untouched while they season`,
+      first: `Swap about $${quarter} through ${n} on ${chain} first, so the wallet has a trade on record, then put the rest in as liquidity in its busiest pool — the one people actually trade against`,
+      deepen: `Leave the position alone and collect the pool fees once a week; a liquidity position that is opened, closed and reopened every day looks like a bot, not a user`,
+      watchFor: `whether the pool you picked on ${n} is still the busy one, or volume has quietly moved elsewhere`,
     };
   }
-  if (c.includes('perpetual') || c.includes('derivative') || c.includes('options')) {
+  if (c.includes('perpetual') || c.includes('derivative') || c.includes('options') || c.includes('basis trading') || c.includes('leveraged')) {
     return {
-      first: `Deposit $${capital} of USDC as margin on ${n} and open one small hedged position, long and short in equal size`,
-      deepen: `Roll the hedge once a week on ${n} so the account shows steady trading volume without directional risk`,
+      first: `Put $${capital} of USDC up as margin on ${n} and open one small hedged trade — long and short in equal size — so the account shows volume without betting on direction`,
+      deepen: `Roll the hedge once a week on ${n} and keep the position small; the moment you start sizing up because it feels easy is the moment to stop`,
+      watchFor: `funding rates on ${n} — a hedge that pays funding every eight hours quietly eats the position`,
     };
   }
   if (c.includes('prediction')) {
     return {
-      first: `Fund $${capital} on ${n} and take one position in its most liquid market, sized under a fifth of the fund`,
-      deepen: `Settle that market on ${n} and take a second position in a different market so the account history spans two events`,
-    };
-  }
-  if (c.includes('curator') || c.includes('allocator') || c.includes('vault')) {
-    return {
-      first: `Deposit $${capital} into a ${n} vault on ${chain} and keep the vault shares in the wallet that deposited`,
-      deepen: `Add about $${Math.round(capital / 4)} more to the same ${n} vault after two weeks so the deposit history shows a pattern, not a spike`,
-    };
-  }
-  if (c.includes('stable') || c.includes('synthetic')) {
-    return {
-      first: `Mint or deposit $${capital} of the stable asset through ${n} on ${chain} and hold the minted balance`,
-      deepen: `Move half the minted balance into ${n}'s own savings or staking option if it has one, and hold both halves`,
+      first: `Fund $${capital} on ${n} and buy into its most liquid market with less than a fifth of it — the market with real volume, not the one with the loudest headline`,
+      deepen: `Once that market settles, take a second position in a different market on ${n}; two settled markets tell a better story than ten open ones`,
+      watchFor: `whether the market you bought on ${n} actually has anyone on the other side when you want out`,
     };
   }
   if (c.includes('rwa')) {
     return {
-      first: `Mint $${capital} of ${n}'s yield asset on ${chain} after its onboarding check and hold the position`,
-      deepen: `Let one full yield period pass on ${n}, then mint a second smaller tranche so the account shows repeat use`,
+      first: `Finish ${n}'s onboarding check first — it is the slow part — then mint $${capital} of its yield asset on ${chain} and hold it; do not skip the check and do not rush it`,
+      deepen: `Let one full yield period run on ${n} before you touch anything, then mint a second, smaller tranche so the account shows someone coming back, not passing through`,
+      watchFor: `the yield ${n} actually pays out versus the yield it advertises, and any change to its terms`,
+    };
+  }
+  if (c.includes('staking') || c.includes('restak') || c.includes('staking pool')) {
+    return {
+      first: `Stake $${capital} of the chain's staking asset through ${n} on ${chain} and keep the staking receipt in the same wallet — the receipt is the record`,
+      deepen: `If ${n} offers restaking or delegation, do it once with the receipt and then leave both positions alone while they season; restaked positions reward patience, not fiddling`,
+      watchFor: `the unbonding wait on ${n} — know how long your money is locked before you need it, not after`,
+    };
+  }
+  if (c.includes('bridge') || c.includes('canonical')) {
+    return {
+      first: `Bridge $${capital} of USDC from Ethereum to ${chain} through ${n} and leave the bridged balance on the far side for a while — a bridge used once and reversed the same day is noise`,
+      deepen: `Spend part of the bridged funds in one real app on ${chain}, then bridge a smaller amount back through ${n} a week later so the round trip has a reason`,
+      watchFor: `the bridge fee and the wait on ${n} — a cheap bridge that takes a day can cost more in missed moves than a dear one`,
+    };
+  }
+  if (c.includes('stable') || c.includes('synthetic') || c.includes('stablecoin')) {
+    return {
+      first: `Mint or deposit $${capital} of the stable asset through ${n} on ${chain} and hold the minted balance where it earns, instead of letting it sit in the wallet doing nothing`,
+      deepen: `Move half the minted balance into ${n}'s own savings option if it has one, and keep both halves where they are — splitting the balance shows you actually use the thing`,
+      watchFor: `whether ${n}'s stable asset still holds its peg when the market gets rough, not just when it is calm`,
     };
   }
   if (c.includes('insurance')) {
     return {
-      first: `Buy $${capital} of cover from ${n} on ${chain} for the longest term it offers and keep the policy active`,
-      deepen: `Renew or extend the ${n} policy once before it lapses so the cover history is unbroken`,
+      first: `Buy $${capital} of cover from ${n} on ${chain} for the longest term it offers, and read what the cover actually excludes before you pay — the exclusions are the product`,
+      deepen: `Renew or extend the ${n} policy once before it lapses so the cover history is unbroken; a gap in cover is a gap in the story`,
+      watchFor: `what ${n} has actually paid out on in the past, and what it has refused`,
     };
   }
   if (c.includes('launchpad') || c.includes('ido')) {
     return {
-      first: `Deposit $${capital} into ${n} on ${chain} and complete its participation or staking step in full`,
-      deepen: `Take part in one live round on ${n} at the smallest tier so the wallet carries a completed participation record`,
+      first: `Stake or deposit the $${capital} ${n} asks for on ${chain} and finish its participation step in full — half-finished signups do not count for anything`,
+      deepen: `Join one live round on ${n} at the smallest tier so the wallet carries a completed participation, then stop; launchpads reward the one who showed up, not the one who went biggest`,
+      watchFor: `whether ${n}'s rounds are actually open to wallets your size, or only to the top tier`,
+    };
+  }
+  if (c.includes('chain')) {
+    return {
+      first: `Bridge $${capital} onto ${n} on ${chain} and use its main app the same week — a new chain with no activity on it is just a wallet with money in it`,
+      deepen: `Come back the next week and do one different thing on ${n}: a second app, a second transaction type, so the history shows a user exploring, not a script repeating`,
+      watchFor: `whether anyone else is actually using ${n} yet, or the chain is still mostly its own team`,
     };
   }
   return {
-    first: `Deposit $${capital} of USDC into ${n} on ${chain} and keep the position open`,
-    deepen: `Repeat a smaller deposit of about $${Math.round(capital / 4)} into ${n} after two weeks so the history shows continuing use`,
+    first: `Put $${capital} of USDC to work in ${n} on ${chain} — deposit it, use the thing properly once, and keep the position open instead of pulling it straight back out`,
+    deepen: `Add about $${quarter} more to the same ${n} position after two weeks, so the history shows someone returning rather than someone who visited once`,
+    watchFor: `whether ${n} is still the same product in a month, or it has quietly changed what it does`,
   };
 }
 
 /**
  * A protocol's farm plan: seven steps, each an action with what it costs and how long it takes.
- * Every figure in it comes from the protocol's own record: its category picks the moves, its
- * first chain prices the gas, its TVL sizes the capital, its age sets the hold, its 7-day
- * change sets the cadence, and the snapshot's date sets the review date.
+ * The plan's shape is the same every time — set up, open, deepen, keep going, hold, check,
+ * log — but the words, the numbers and the warnings follow this row's own record.
  */
 export function farmSteps(p: SnapshotProtocol, age: number | null, asOf: string): FarmStep[] {
   const chain = chainOf(p);
@@ -504,46 +565,79 @@ export function farmSteps(p: SnapshotProtocol, age: number | null, asOf: string)
   const capital = capitalFor(p);
   const hold = holdDaysFor(age);
   const review = dateAfter(asOf, hold);
-  const actions = actionsFor(p, capital, chain);
+  const play = actionsFor(p, capital, chain);
   const growth = finite(p.change_7d, 0);
-  const cadence =
+  const multiChain = p.chains.length > 1;
+
+  const wallet = pick(
+    [
+      `Open a fresh wallet just for ${p.name} — one protocol, one wallet, so nothing else in your history muddies it — fund it from your main wallet and write the seed phrase down offline, on paper, not in a screenshot`,
+      `Give ${p.name} its own wallet. Fund it once from your main wallet, keep the seed phrase off any screen, and do not use this wallet for anything else`,
+      `Start with a clean wallet for ${p.name} alone, funded from your main wallet. If this wallet ever gets drained or spammed, you lose one farm, not your whole history`,
+    ],
+    p.slug,
+  );
+  const walletCost = chain.toLowerCase() === 'ethereum'
+    ? `${gas} of gas for the funding transaction — on Ethereum, do it once and do it properly`
+    : `${gas} of gas for the funding transaction`;
+
+  const cadence: FarmStep =
     growth >= 10
-      ? { text: `Interact twice a week while ${p.name}'s TVL is climbing this fast: repeat the smaller of the two moves above, alternating them`, cost: `${gas} of gas a visit`, time: '10 minutes twice a week' }
+      ? {
+          text: `While ${p.name}'s TVL is up ${pct1(growth)} in seven days, show up twice a week: repeat the smaller of the two moves above, alternating them. The rising number is a reason to be present, not a reason to add fresh capital — the crowd arriving now is the same crowd that leaves first`,
+          cost: `${gas} of gas a visit`,
+          time: '10 minutes twice a week',
+        }
       : growth < -5
-        ? { text: `Interact once every two weeks: ${p.name}'s TVL is shrinking, so keep the position but add no new capital until it steadies`, cost: `${gas} of gas a visit`, time: '10 minutes every two weeks' }
-        : { text: `Interact once a week with ${p.name}: repeat the smaller of the two moves above so each week adds one dated transaction`, cost: `${gas} of gas a visit`, time: '10 minutes a week' };
+        ? {
+            text: `TVL is down ${pct1(growth)} in a week, so slow down: touch ${p.name} once a fortnight, keep the position, and add no new capital until the bleeding stops — farming a shrinking pool with fresh money is how people lose twice`,
+            cost: `${gas} of gas a visit`,
+            time: '10 minutes every two weeks',
+          }
+        : {
+            text: `Once a week is enough for ${p.name}: repeat the smaller of the two moves above so each week adds one dated transaction, and let the weeks stack up — airdrops are won by the boring middle, not the first day`,
+            cost: `${gas} of gas a visit`,
+            time: '10 minutes a week',
+          };
+
+  const holdText =
+    age === null
+      ? `Hold the position at least ${hold} days, until ${review}, and treat that date as real: a position closed early leaves no history worth snapshotting`
+      : age < 180
+        ? `Hold at least ${hold} days, until ${review} — ${p.name} is young, so it needs the longer window to prove the activity is not a one-week stunt`
+        : age >= 730
+          ? `Hold at least ${hold} days, until ${review}; ${p.name} has been around a while, so a month of steady use is enough to look like a regular, not a tourist`
+          : `Hold the position at least ${hold} days, until ${review}, so the activity spans more than one weekly snapshot of ${p.name}`;
+  const holdCost = multiChain
+    ? `the $${capital} stays put until then, across ${p.chains.length} chains — do not split it chasing a second chain`
+    : `the $${capital} stays in the position until then`;
+
+  const check = pick(
+    [
+      `On ${review}, open ${p.name}'s own site and look for a points, rewards or governance page — a claim or snapshot announcement, if there is one, will be there. Only follow links that site itself publishes`,
+      `Come back on ${review} and check ${p.name}'s own site for any points or claim page. If a stranger's link promises you a claim, it is not a claim, it is a trap`,
+      `On the review date, go to ${p.name}'s own site — not a search result, not a reply in your mentions — and see whether it has published anything about points, a snapshot or a claim`,
+    ],
+    `${p.slug}-check`,
+  );
+
+  const log = pick(
+    [
+      `Keep a farm log: the wallet, every date, every transaction hash. And unwind the position if ${p.name}'s TVL falls by a third in a week or its terms change — a plan that never exits is not a plan`,
+      `Write it all down — wallet, dates, hashes — in a farm log you can actually find in three months. If ${p.name}'s TVL drops by a third in a week, or the terms move, close the position and walk away`,
+      `Log the wallet, each date and each hash, and decide the exit now, while you are calm: if ${p.name}'s TVL falls by a third in a week or its terms change, you unwind, no second thoughts`,
+    ],
+    `${p.slug}-log`,
+  );
+
   return [
-    {
-      text: `Set up a fresh wallet for ${p.name} alone, fund it from your main wallet, and keep its seed phrase offline`,
-      cost: `${gas} of gas for the funding transaction`,
-      time: '10 minutes',
-    },
-    {
-      text: actions.first,
-      cost: `$${capital} of capital and ${gas} of gas`,
-      time: '15 minutes to set up',
-    },
-    {
-      text: actions.deepen,
-      cost: `${gas} of gas, no new capital beyond the first position`,
-      time: '10 minutes',
-    },
+    { text: wallet, cost: walletCost, time: '10 minutes' },
+    { text: play.first, cost: `$${capital} of capital and ${gas} of gas`, time: '15 minutes to set up' },
+    { text: play.deepen, cost: `${gas} of gas, no new capital beyond the first position`, time: '10 minutes' },
     cadence,
-    {
-      text: `Hold the position at least ${hold} days, until ${review}, so the activity spans more than one weekly snapshot of ${p.name}`,
-      cost: `the $${capital} stays in the position until then`,
-      time: `${hold} days`,
-    },
-    {
-      text: `On the review date, open ${p.name}'s own site and check its points, rewards or governance page for a claim or snapshot announcement, following only links the site itself publishes`,
-      cost: 'nothing to check; never pay a fee to claim',
-      time: '10 minutes',
-    },
-    {
-      text: `Log the wallet, every date and transaction hash in a farm log, and unwind the position if ${p.name}'s TVL falls by a third in a week or its terms change`,
-      cost: 'nothing but the log',
-      time: '5 minutes a week',
-    },
+    { text: holdText, cost: holdCost, time: `${hold} days` },
+    { text: `${check}. Watch for ${play.watchFor}.`, cost: 'nothing to check; never pay a fee to claim', time: '10 minutes' },
+    { text: log, cost: 'nothing but the log', time: '5 minutes a week' },
   ];
 }
 

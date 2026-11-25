@@ -2,6 +2,11 @@
 // renders three views of one dataset: the ranked pre-token board, the live-token comparison set
 // the model's multiples are priced from, and the method, with every category anchor printed.
 // No network: every byte it shows arrived in data.js.
+//
+// The voice here is deliberate: this is a tool for someone deciding where to spend the next
+// month of their evenings. So it says plainly what a row is, why it sits where it sits, and
+// what could be wrong with the number — including when a multiple is priced off a single
+// traded token and should be taken with a pinch of salt.
 (function () {
   'use strict';
 
@@ -104,9 +109,9 @@
         el('span', { class: 'mark', text: 'RADAR' }),
         el('h1', { text: 'Token Launch Radar' })),
       el('p', { class: 'tagline' },
-        'Protocols that record no token yet, ranked by what a token would be worth if each one\'s record stayed as it is. ',
-        el('strong', { text: 'The multiple is the market\'s own: ' }),
-        'the median market-cap-to-TVL of the traded tokens in each category, shrunk toward the global median. Growth, years run tokenless and chain breadth adjust it. Every row carries its farm plan. Snapshot of ' + DATA.as_of + '.'),
+        'Every protocol here has no token on record — yet. This board asks one question about each of them: ',
+        el('strong', { text: 'if it launched a token tomorrow and the market priced it like its neighbours, what would it be worth? ' }),
+        'The answer comes from the market itself: what traded tokens in the same category actually fetch per dollar of TVL. The top of the board is where the money already is. The bottom is where it might go next. Snapshot of ' + DATA.as_of + '.'),
       el('div', { class: 'stats' }, ...stats.map(function (s) {
         return el('div', { class: 'stat' }, el('b', { text: s[0] }), el('span', { text: s[1] }));
       })));
@@ -120,6 +125,39 @@
       }, label);
     }
     return el('nav', { class: 'tabs' }, tab('board', 'Pre-token board'), tab('live', 'Live tokens (the comps)'), tab('method', 'Method & anchors'));
+  }
+
+  // One honest line per top row, built from that row's own figures — never a slogan.
+  // A row priced off one comp says so; a row bleeding TVL says so; a young, fast
+  // one says so. If you only read five lines on this page, read these.
+  function spotlightLine(r) {
+    var bits = [];
+    bits.push(fmtUsd(r.tvl_usd) + ' locked');
+    if (r.change_7d !== null && r.change_7d >= 10) bits.push('TVL up ' + fmtPct(r.change_7d) + ' in a week');
+    else if (r.change_7d !== null && r.change_7d < -5) bits.push('TVL down ' + fmtPct(r.change_7d) + ' in a week');
+    else if (r.change_7d !== null) bits.push('TVL roughly flat (' + fmtPct(r.change_7d) + ' in a week)');
+    if (r.age_days === null) bits.push('tracked for an unknown length of time');
+    else if (r.age_days < 180) bits.push('only ' + fmtAge(r.age_days) + ' tokenless — young, so the hold is longer');
+    else if (r.age_days >= 1460) bits.push(fmtAge(r.age_days) + ' tokenless, an old hand');
+    else bits.push(fmtAge(r.age_days) + ' tokenless');
+    if (r.category_comps <= 1) bits.push('but priced off just ' + r.category_comps + ' traded comp — thin evidence, treat the number gently');
+    else if (r.category_comps <= 3) bits.push('priced off only ' + r.category_comps + ' traded comps');
+    if (r.chains.length >= 6) bits.push('live on ' + r.chains.length + ' chains');
+    else if (r.chains.length === 1) bits.push('on one chain only, so it is a single-chain bet');
+    bits.push('implied ' + fmtUsd(r.implied_value_usd));
+    return bits.join(' · ') + '.';
+  }
+
+  function spotlight() {
+    var top = DATA.rows.slice(0, 5);
+    return el('section', { class: 'spotlight' },
+      el('h2', { text: 'Start here' }),
+      el('p', { class: 'spot-note', text: 'Five rows, five sentences. If you farm one thing this month, start at the top and work down — and read the caveat in each line before you put money in.' }),
+      el('ol', {}, ...top.map(function (r) {
+        var li = el('li', {}, el('b', { text: '#' + r.rank + ' ' + r.name + ' — ' }), spotlightLine(r));
+        li.addEventListener('click', function () { state.selected = r.slug; render(); });
+        return li;
+      })));
   }
 
   function categories() {
@@ -155,6 +193,7 @@
 
   function boardView() {
     var frag = document.createDocumentFragment();
+    frag.appendChild(spotlight());
     var search = el('input', { type: 'search', placeholder: 'Search name or slug', value: state.q, 'aria-label': 'Search protocols' });
     search.addEventListener('input', function () { state.q = search.value; refreshTable(); writeHash(); });
     var catSel = el('select', { 'aria-label': 'Filter by category' },
@@ -237,7 +276,9 @@
   function liveView() {
     var frag = document.createDocumentFragment();
     frag.appendChild(el('p', { class: 'tagline' },
-      'These protocols\' tokens already trade, so the radar never ranks them. They are here because they price the board: each one\'s market-cap-to-TVL ratio is a comparison behind its category\'s multiple.'));
+      'These tokens already trade, so the radar never ranks them — and that is exactly why they are here. ',
+      'Each one is a price tag: its market cap divided by its TVL is what the market actually pays for a dollar locked in its category. ',
+      'When a category has only one or two of these, its multiple is standing on very little; when it has twenty, you can lean on it a bit more.'));
     var table = el('table', {},
       el('thead', {}, el('tr', {},
         el('th', { text: 'Protocol' }), el('th', { text: 'Token' }), el('th', { text: 'Category' }),
@@ -261,16 +302,16 @@
     var frag = document.createDocumentFragment();
     var box = el('div', { class: 'method' });
     box.appendChild(el('p', {},
-      el('b', { text: 'What the board claims. ' }),
-      'Each row\'s implied value is what a token would be worth if the protocol\'s record stayed exactly as the snapshot has it. It is this entry\'s own claim, derived only from the snapshot\'s figures: no outside price, no list of favoured names, and no guess about whether or when a token is issued.'));
+      el('b', { text: 'What the board is actually claiming. ' }),
+      'Each row\'s implied value is what a token would be worth if the protocol\'s record stayed exactly as the snapshot has it. That is this entry\'s own claim, built only from the snapshot\'s figures: no outside price, no list of favourite names, and no guess about whether — or when — a token is ever issued. A protocol on this board may never launch anything, and the board would still be right about what it is worth today.'));
     box.appendChild(el('p', {},
       el('b', { text: 'The anchor. ' }),
-      'For every category, take the protocols in it whose token already trades and divide market cap by TVL. The category\'s multiple is the median of those ratios, shrunk toward the global median (' + fmtMult(DATA.global_multiple) + ' across ' + DATA.global_comps + ' traded tokens) by the count behind it: multiple = (n x median + ' + M.shrink_k + ' x global) / (n + ' + M.shrink_k + '). Ratios are winsorized at ' + fmtMult(DATA.ratio_cap) + ' first, the 90th percentile of them all, so one token trading on a sliver of recorded TVL cannot price a whole category. A category with no traded token is priced on the global median.'));
+      'For every category, take the protocols in it whose token already trades and divide market cap by TVL. The category\'s multiple is the median of those ratios, shrunk toward the global median (' + fmtMult(DATA.global_multiple) + ' across ' + DATA.global_comps + ' traded tokens) by the count behind it: multiple = (n x median + ' + M.shrink_k + ' x global) / (n + ' + M.shrink_k + '). Ratios are winsorized at ' + fmtMult(DATA.ratio_cap) + ' first, the 90th percentile of them all, so one token trading on a sliver of recorded TVL cannot price a whole category. A category with no traded token is priced on the global median — and the page says so on the row, rather than hiding it.'));
     var list = el('ul', {},
-      el('li', {}, el('b', { text: 'Growth: ' }), 'the 7-day TVL change, clamped to ' + M.growth_floor + '%..+' + M.growth_cap + '%, moves the value by that change x ' + M.growth_weight + '. A protocol shrinking fast is worth less than its TVL alone says.'),
+      el('li', {}, el('b', { text: 'Growth: ' }), 'the 7-day TVL change, clamped to ' + M.growth_floor + '%..+' + M.growth_cap + '%, moves the value by that change x ' + M.growth_weight + '. A protocol shrinking fast is worth less than its TVL alone says — and the farm plan tells you to slow down on it, not to buy the dip.'),
       el('li', {}, el('b', { text: 'Maturity: ' }), 'a protocol that has run ' + (M.maturity_days / 365) + ' years with no token earns the full multiple; a new one is discounted to ' + Math.round(M.maturity_floor * 100) + '% of it, because young TVL often leaves. Unknown listing dates are treated as one year.'),
-      el('li', {}, el('b', { text: 'Breadth: ' }), 'each chain past the first adds ' + Math.round(M.breadth_per_chain * 100) + '%, up to ' + M.breadth_max_extra_chains + ' extra chains: more chains, more surface a launch can be priced on.'),
-      el('li', {}, el('b', { text: 'Who is ranked: ' }), 'every protocol that records no token, minus exchanges, exchanges\' own products, versioned deployments of another product, and the wrapper categories (bridges, canonical bridges, liquid staking and restaking), whose value is an asset that already trades. All ' + DATA.watchlist_size + ' watchlist protocols are in, plus ' + DATA.early_size + ' more below the $' + (DATA.floor_usd / 1e6) + 'M floor. "Records no token" is DefiLlama\'s record, not proof a token does not exist.'));
+      el('li', {}, el('b', { text: 'Breadth: ' }), 'each chain past the first adds ' + Math.round(M.breadth_per_chain * 100) + '%, up to ' + M.breadth_max_extra_chains + ' extra chains: more chains, more surface a launch can be priced on — and more places to keep track of.'),
+      el('li', {}, el('b', { text: 'Who is ranked: ' }), 'every protocol that records no token, minus exchanges, exchanges\' own products, versioned deployments of another product, and the wrapper categories (bridges, canonical bridges, liquid staking and restaking), whose value is an asset that already trades. All ' + DATA.watchlist_size + ' watchlist protocols are in, plus ' + DATA.early_size + ' more below the $' + (DATA.floor_usd / 1e6) + 'M floor — the early rows are the point of a radar. "Records no token" is DefiLlama\'s record, not proof a token does not exist.'));
     box.appendChild(list);
     box.appendChild(el('h3', { text: 'Category anchors derived from this snapshot' }));
     var table = el('table', {},
@@ -297,6 +338,42 @@
       el('span', { class: 'val', text: fmtMult(mult) }));
   }
 
+  // The plain-words take on one row. It is computed, not written per protocol, but it
+  // changes its mind by bucket: a young riser, an old flat giant, a shrinking row, a
+  // row priced off one comp and a small early row are five different stories, and the
+  // page should not tell them in the same voice.
+  function takeFor(row) {
+    var growth = row.change_7d === null ? 0 : row.change_7d;
+    var age = row.age_days === null ? null : row.age_days;
+    var thin = row.category_comps <= 1;
+    var small = row.tvl_usd < DATA.floor_usd;
+    var parts = [];
+    if (growth >= 10 && age !== null && age < 365) {
+      parts.push('This one is moving. TVL is up ' + fmtPct(row.change_7d) + ' in a week and it has only been tokenless for ' + fmtAge(age) + ', so the crowd is arriving faster than the track record — exciting, and exactly the kind of row that can give the money back just as fast.');
+    } else if (growth >= 10) {
+      parts.push('TVL is up ' + fmtPct(row.change_7d) + ' in a week on a protocol that has already been around a while. Growth on top of age is the combination this board likes most; it is also the combination people chase, so do not add capital just because the number is green.');
+    } else if (growth < -5) {
+      parts.push('Be honest about this one: TVL fell ' + fmtPct(row.change_7d) + ' in seven days. The board still ranks it on size, but the farm plan slows down on purpose — keep what you have, add nothing new until it steadies.');
+    } else if (age !== null && age >= 1460) {
+      parts.push('An old hand. ' + fmtAge(age) + ' with no token means it has survived several cycles of people assuming a launch was near. If it ever does launch, the size is real; if it never does, a month of farming it costs you a month.');
+    } else if (small) {
+      parts.push('Small and early: ' + fmtUsd(row.tvl_usd) + ' is below the watchlist floor, which is why a radar exists at all. The implied value is big next to the TVL because the category pays well — but a small row can also halve in a week without anyone noticing.');
+    } else if (row.chains.length >= 6) {
+      parts.push('It is everywhere — ' + row.chains.length + ' chains — which is why the breadth adjustment lifts it. That spread is real distribution, and it is also real work: you farm it on its first chain and you keep an eye on the rest.');
+    } else {
+      parts.push('A steady middle-of-the-board row: real TVL, no drama in the last seven days, priced the way its category is priced. Nothing here screams, and that is the point — most good farms are boring for weeks at a time.');
+    }
+    if (thin) {
+      parts.push('One warning that matters: this category\'s multiple rests on just ' + row.category_comps + ' traded token, so the implied value is a thinly-priced guess. Treat it as a direction, not a price.');
+    } else if (row.category_comps <= 3) {
+      parts.push('Worth knowing: only ' + row.category_comps + ' traded tokens price this category, so the multiple is shakier than it looks in the table.');
+    }
+    if (row.watchlist) {
+      parts.push('It is on the watchlist, so it was already on the house\'s radar before this board existed — that is a signal, not a guarantee.');
+    }
+    return parts.join(' ');
+  }
+
   function drawer(row) {
     var frag = document.createDocumentFragment();
     frag.appendChild(el('div', { class: 'scrim', onclick: function () { state.selected = null; render(); } }));
@@ -305,6 +382,7 @@
       el('button', { class: 'close', type: 'button', onclick: function () { state.selected = null; render(); } }, 'Close'),
       el('h2', {}, row.name, row.watchlist ? el('span', { class: 'watch', text: 'WATCHLIST' }) : null),
       el('p', { class: 'dsub', text: 'Rank #' + row.rank + ' of ' + DATA.board_size + ' · ' + (row.category || 'Uncategorised') + ' · records no token' }),
+      el('p', { class: 'take', text: takeFor(row) }),
       el('div', { class: 'kv' },
         el('div', {}, el('b', { text: fmtUsd(row.implied_value_usd) }), el('span', { text: 'Implied value' })),
         el('div', {}, el('b', { text: fmtUsd(row.tvl_usd) }), el('span', { text: 'TVL' })),
@@ -328,7 +406,7 @@
       el('p', { class: 'note', text: 'Chains: ' + (row.chains.length ? row.chains.join(', ') : 'none recorded') + '. First tracked ' + (row.listed_at || 'on an unrecorded date') + '; snapshot ' + DATA.as_of + '.' }),
       el('h3', { text: 'Farm plan' }),
       el('ol', { class: 'plan' }, ...row.farm_steps.map(function (s) { return el('li', { text: s }); })),
-      el('p', { class: 'note', text: 'Capital, gas and timing in each step are sized from this protocol\'s own TVL, first chain, category and age. A plan is preparation, not a promise: a protocol may never issue a token.' }));
+      el('p', { class: 'note', text: 'Capital, gas and timing in each step are sized from this protocol\'s own TVL, first chain, category and age. A plan is preparation, not a promise: a protocol may never issue a token, and no step here is advice to buy, sell or hold anything.' }));
     // Set the bar widths now that the nodes exist.
     var bars = d.querySelectorAll('.bar i');
     var mults = [row.category_multiple, row.growth_multiplier, row.maturity_multiplier, row.breadth_multiplier];
@@ -346,7 +424,7 @@
     var wrap = el('div', { class: 'wrap' }, header(), tabs());
     var view = state.view === 'live' ? liveView() : state.view === 'method' ? methodView() : boardView();
     wrap.appendChild(view);
-    wrap.appendChild(el('p', { class: 'foot', text: 'Source: ' + DATA.source + '. Model ' + DATA.model_version + ' (comps-anchored). Implied values are this dashboard\'s own claims about a hypothetical token, not prices and not advice.' }));
+    wrap.appendChild(el('p', { class: 'foot', text: 'Source: ' + DATA.source + '. Model ' + DATA.model_version + ' (comps-anchored). Implied values are this dashboard\'s own claims about a hypothetical token, not prices and not advice. A protocol here may never launch a token at all.' }));
     app.appendChild(wrap);
     if (view._fill) view._fill();
     if (state.selected) {

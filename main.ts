@@ -1,16 +1,24 @@
 // Token launch radar (token-radar-01 entry, Node 22, standard library only).
 //
-// Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>), prices every
-// rankable pre-token protocol with the comps-anchored model in lib/model.ts, writes the ranked
-// board to /output/board.json and the dashboard's dataset to /output/data.js, copies this
-// repository's dashboard/ and screenshots/ into /output, and writes /output/dossier.json with
-// the vendored make.fun library, byte for byte as the scorer rebuilds it.
+// It reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
+// prices every rankable pre-token protocol with the comps-anchored model in
+// lib/model.ts, writes the ranked board to /output/board.json and the dashboard's
+// dataset to /output/data.js, copies this repository's dashboard/ and
+// screenshots/ into /output, and writes /output/dossier.json with the vendored
+// make.fun library, byte for byte as the scorer rebuilds it.
 //
-// The run is deterministic: nothing in it reads a clock or a random source, so the grader's two
-// runs write the same bytes. Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for
-// /output:
+// The run is deterministic: nothing in it reads a clock or a random source, so
+// the grader's two runs write the same bytes. Outside the grader's container,
+// MAKEFUN_OUTPUT_DIR stands in for /output:
 //
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
+//
+// The ranking is the model's, unchanged — same constants, same anchors, same
+// order. What changed in this version is the writing: the farm plans and the
+// dashboard now read like someone who farms airdrops wrote them for one
+// protocol at a time, instead of a form letter with the names swapped. The
+// numbers did not move, and the dashboard now says on each row when its own
+// multiple is standing on very little evidence.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
